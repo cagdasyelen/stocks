@@ -60,19 +60,20 @@
 
     <p>Customize <a href="https://github.com/toddwschneider/stocks" target="_blank">on GitHub</a></p>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js"></script>
     <script>
       'use strict';
 
       const DEFAULT_PORTFOLIOS = [
-        {'name': 'Market ETFs', 'symbols': ['SPY', 'DIA', 'QQQ', 'IWM']},
-        {'name': 'Sector ETFs', 'symbols': ['XLF', 'XLK', 'XLC', 'XLV', 'XLP', 'XLY', 'XLE', 'XLB', 'XLI', 'XLU', 'XLRE']},
-        {'name': 'Banks', 'symbols': ['GS', 'MS', 'JPM', 'WFC', 'C', 'BAC', 'BCS', 'DB', 'CS', 'RBS']},
-        {'name': 'Tech', 'symbols': ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'FB', 'TWTR', 'NFLX', 'SNAP', 'SPOT', 'DBX', 'SQ', 'BABA', 'INTC', 'AMD', 'NVDA', 'ORCL']},
-        {'name': 'Bond ETFs', 'symbols': ['BND', 'BIV', 'JNK']},
-        {'name': 'Other ETFs', 'symbols': ['VOO', 'VTI', 'VGK', 'VPL', 'VWO', 'VDE', 'XOP', 'VFH', 'VHT', 'VIG', 'VYM', 'VAW', 'REM', 'XHB', 'GLD', 'SHV', 'FLOT', 'MJ']},
-        {'name': 'Mortgage REITs', 'symbols': ['EFC', 'EARN', 'NLY', 'AGNC', 'CIM', 'TWO', 'NRZ']},
-        {'name': 'Autos', 'symbols': ['F', 'GM', 'FCAU', 'TM', 'HMC', 'TSLA']},
-        {'name': 'BigCos', 'symbols': ['XOM', 'WMT', 'JNJ', 'GE', 'T', 'KO', 'DIS', 'MCD', 'PG']}
+        {'name': 'Tech', 'symbols': ["AAPL", "AMZN", "MSFT", "GOOGL", "FB", "BABA", "INTC", "ORCL", "NVDA", "NFLX", "SQ", "SPOT", "AMD", "TWTR", "SNAP", "DBX"]},
+        // {'name': 'Market ETFs', 'symbols': ['SPY', 'DIA', 'QQQ', 'IWM']},
+        // {'name': 'Sector ETFs', 'symbols': ['XLF', 'XLK', 'XLC', 'XLV', 'XLP', 'XLY', 'XLE', 'XLB', 'XLI', 'XLU', 'XLRE']},
+        // {'name': 'Banks', 'symbols': ['GS', 'MS', 'JPM', 'WFC', 'C', 'BAC', 'BCS', 'DB', 'CS', 'RBS']},
+        // {'name': 'Bond ETFs', 'symbols': ['BND', 'BIV', 'JNK']},
+        // {'name': 'Other ETFs', 'symbols': ['VOO', 'VTI', 'VGK', 'VPL', 'VWO', 'VDE', 'XOP', 'VFH', 'VHT', 'VIG', 'VYM', 'VAW', 'REM', 'XHB', 'GLD', 'SHV', 'FLOT', 'MJ']},
+        // {'name': 'Mortgage REITs', 'symbols': ['EFC', 'EARN', 'NLY', 'AGNC', 'CIM', 'TWO', 'NRZ']},
+        // {'name': 'Autos', 'symbols': ['F', 'GM', 'FCAU', 'TM', 'HMC', 'TSLA']},
+        // {'name': 'BigCos', 'symbols': ['XOM', 'WMT', 'JNJ', 'GE', 'T', 'KO', 'DIS', 'MCD', 'PG']}
       ];
 
       const PORTFOLIOS = portfoliosFromQueryParams() || DEFAULT_PORTFOLIOS;
@@ -87,7 +88,6 @@
       PORTFOLIOS.forEach((p, i) => addPortfolio(p, i === 0));
       symbols = symbols.filter((s, i) => symbols.indexOf(s) === i);
       updateData('addTitle');
-      setInterval(updateData, REFRESH_SECONDS * 1000);
 
       function addPortfolio(portfolio, includeHeader) {
         let tableHeaderHtml = '';
@@ -97,9 +97,11 @@
               <tr>
                 <th></th>
                 <th class="stock-price">Last</th>
-                <th class="stock-change">Change</th>
-                <th class="stock-change-pct">Change%</th>
-                <th class="stock-mkt-cap">Mkt Cap</th>
+                <th class="stock-1d">Today</th>
+                <th class="stock-1m">1 month</th>
+                <th class="stock-3m">3 month</th>
+                <!--th class="stock-6m">6 month</th--!>
+                <th class="stock-1y">1 year</th>
               </tr>
             </thead>
           `
@@ -113,9 +115,11 @@
             <tr data-symbol="${symbol}">
               <td class="stock-symbol"><a href="${symbolUrl(symbol)}" target="_blank">${symbol}</a></td>
               <td class="stock-price"></td>
-              <td class="stock-change"></td>
-              <td class="stock-change-pct"></td>
-              <td class="stock-mkt-cap"></td>
+              <td class="stock-1d"><canvas></canvas></td>
+              <td class="stock-1m"><canvas></canvas></td>
+              <td class="stock-3m"><canvas></canvas></td>
+              <!--td class="stock-6m"><canvas></canvas></td--!>
+              <td class="stock-1y"><canvas></canvas></td>
             </tr>
           `
 
@@ -145,48 +149,80 @@
         updatedDiv.innerHTML = `Data updated at ${(new Date()).toLocaleString()}`;
       }
 
-      function updateDataForBatch(symbols, addTitle) {
-        let filters = ['latestPrice', 'change', 'changePercent', 'marketCap'];
-        if (addTitle) filters.push('companyName');
-        let url = `${BASE_URL}?types=quote&symbols=${symbols.join(',')}&filter=${filters.join(',')}`;
+      function chartData(data) {
+        if (typeof(data) === 'undefined') return;
 
-        fetch(url).then(response => response.json()).then(json => {
-          symbols.forEach(symbol => {
-            let data = json[symbol];
-            if (typeof(data) === 'undefined') return;
+        const labels = data.chart.map(point => "");
+        // console.log(data.chart[data.chart.length-1].close - data.chart[0].open, (data.chart[data.chart.length-1].close - data.chart[0].open) / data.chart[0].open, data.chart);
+        return {
+          labels: labels,
+          datasets: [{
+            borderColor: (data.chart[data.chart.length-1].open - data.chart[0].open) > 0 ? 'rgb(0,255,0)' : 'rgb(255,0,0)',
+            fill: false,
+            data: data.chart.map(point => point.open === -1 ? NaN : point.open),
+          }, {
+            fill: false,
+            data: data.chart.map(point => point.low === -1 ? NaN : point.low),
+          }, {
+            fill: false,
+            data: data.chart.map(point => point.high === -1 ? NaN : point.high),
+          }]
+        };
+      }
+      async function updateDataForBatch(symbols, addTitle) {
+        let fetch_1d = fetch(`${BASE_URL}?types=chart,quote&symbols=${symbols.join(',')}&chartSimplify=true&range=1d`);
+        let fetch_1m = fetch(`${BASE_URL}?types=chart&symbols=${symbols.join(',')}&chartSimplify=true&range=1m`);
+        let fetch_3m = fetch(`${BASE_URL}?types=chart&symbols=${symbols.join(',')}&chartSimplify=true&range=3m`);
+        // let fetch_6m = fetch(`${BASE_URL}?types=chart&symbols=${symbols.join(',')}&chartSimplify=true&range=6m`);
+        let fetch_1y = fetch(`${BASE_URL}?types=chart&symbols=${symbols.join(',')}&chartSimplify=true&range=1y`);
 
-            let formattedPrice = formatQuote(data.quote.latestPrice);
-            let formattedChange = data.quote.change.toLocaleString('en', {'minimumFractionDigits': 2});
-            let formattedChangePercent = (data.quote.changePercent * 100).toFixed(1) + '%';
-            let formattedMarketCap = formatMarketCap(data.quote.marketCap);
-            let rgbColor = data.quote.changePercent > 0 ? '0,255,0' : '255,0,0';
-            let rgbOpacity = Math.min(Math.abs(data.quote.changePercent) * 20, 1);
+        const response = await fetch_1d.then(response => response.json());
+        const response_1m = await fetch_1m.then(response => response.json());
+        const response_3m = await fetch_3m.then(response => response.json());
+        // const response_6m = await fetch_6m.then(response => response.json());
+        const response_1y = await fetch_1y.then(response => response.json());
 
-            document.querySelectorAll(`[data-symbol="${symbol}"] .stock-price`).forEach(e => {
-              e.innerHTML = formattedPrice;
-              e.setAttribute('style', `background-color: rgba(${rgbColor}, ${rgbOpacity})`);
-            });
+        // Allows me to reorder the portfolio
+        // console.log(symbols.sort((a, b) => response[b].quote.marketCap - response[a].quote.marketCap));
 
-            document.querySelectorAll(`[data-symbol="${symbol}"] .stock-change`).forEach(e => {
-              e.innerHTML = formattedChange;
-              e.setAttribute('style', `background-color: rgba(${rgbColor}, ${rgbOpacity})`);
-            });
+        symbols.forEach(symbol => {
+          const data = response[symbol];
+          if (data === undefined) return;
 
-            document.querySelectorAll(`[data-symbol="${symbol}"] .stock-change-pct`).forEach(e => {
-              e.innerHTML = formattedChangePercent;
-              e.setAttribute('style', `background-color: rgba(${rgbColor}, ${rgbOpacity})`);
-            });
+          const result = {
+            '1d': chartData(response[symbol]),
+            '1m': chartData(response_1m[symbol]),
+            '3m': chartData(response_3m[symbol]),
+            //'6m': chartData(response_6m[symbol]),
+            '1y': chartData(response_1y[symbol]),
+          };
 
-            document.querySelectorAll(`[data-symbol="${symbol}"] .stock-mkt-cap`).forEach(e => {
-              e.innerHTML = formattedMarketCap;
-              e.setAttribute('style', `background-color: rgba(${rgbColor}, ${rgbOpacity})`);
-            });
+          let formattedPrice = formatQuote(data.quote.latestPrice);
+          let formattedMarketCap = formatMarketCap(data.quote.marketCap);
+          let rgbColor = data.quote.changePercent > 0 ? '0,255,0' : '255,0,0';
+          let rgbOpacity = Math.min(Math.abs(data.quote.changePercent) * 20, 1);
 
-            if (addTitle) {
-              document.querySelectorAll(`[data-symbol="${symbol}"] .stock-symbol a`).forEach(e => {
-                e.setAttribute('title', data.quote.companyName);
+          document.querySelectorAll(`[data-symbol="${symbol}"] .stock-price`).forEach(e => {
+            e.innerHTML = `${formattedPrice}<br /><br />(${formattedMarketCap})`;
+            e.setAttribute('style', `background-color: rgba(${rgbColor}, ${rgbOpacity})`);
+          });
+
+          Object.entries(result).forEach(([key, value]) => {
+            document.querySelectorAll(`[data-symbol="${symbol}"] .stock-${key} > canvas`).forEach(e => {
+              new Chart(e, {
+                type: 'line',
+                data: value,
+                options: {
+                  elements: {
+                    line: { tension: 0 } // disables bezier curves
+                  },
+                  animation: { duration: 0 }, // general animation time
+                  hover: { animationDuration: 0 }, // duration of animations when hovering an item
+                  responsiveAnimationDuration: 0, // animation duration after a resize
+                  legend: { display: false }
+                }
               });
-            }
+            });
           });
         });
       }
